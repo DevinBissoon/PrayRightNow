@@ -19,12 +19,11 @@
   </noscript>
 </head>
 <body class="bg-gray-100 font-sans">
-  <!-- keep this id; the script targets it -->
   <div id="app-container" class="min-h-screen flex items-center justify-center p-4">Loading…</div>
 
   <script>
   (function () {
-    // Show any error as a red bar instead of a blank page
+    // Error bar instead of blank page
     function showError(msg) {
       try {
         var bar = document.createElement('div');
@@ -43,7 +42,7 @@
       var app = document.getElementById('app-container');
       if (!app) { showError('#app-container not found'); return; }
 
-      // Basic state (no fancy syntax)
+      // State
       var stage = 'start';
       var isLoading = false;
       var errorMessage = '';
@@ -53,11 +52,11 @@
         try {
           var html = '';
           if (isLoading) {
-            html = '' +
-            '<div class="bg-white rounded-3xl shadow-2xl p-8 sm:p-12 max-w-2xl w-full flex flex-col items-center justify-center">' +
-              '<div class="spinner"></div>' +
-              '<p class="mt-6 text-xl text-gray-600 font-semibold text-center">Finding a verse just for you...</p>' +
-            '</div>';
+            html =
+              '<div class="bg-white rounded-3xl shadow-2xl p-8 sm:p-12 max-w-2xl w-full flex flex-col items-center justify-center">' +
+                '<div class="spinner"></div>' +
+                '<p class="mt-6 text-xl text-gray-600 font-semibold text-center">Finding a verse just for you...</p>' +
+              '</div>';
           } else {
             var verseBlock = '';
             if (selectedVerse) {
@@ -75,9 +74,8 @@
                   '<div class="flex flex-col items-center space-y-4 text-center">' +
                     '<h1 class="text-3xl sm:text-4xl font-bold text-gray-800">Your Bible Helper</h1>' +
                     '<p class="text-lg sm:text-xl text-gray-600 max-w-md">A simple, private space to find a Bible verse that resonates with your heart today.</p>' +
-                    '<div class="flex gap-3 mt-4">' +
+                    '<div class="mt-4">' +
                       '<button id="start" class="px-8 py-4 bg-purple-600 text-white text-lg font-semibold rounded-full shadow-lg hover:bg-purple-700 transition">Find Your Verse</button>' +
-                      '<button id="test-api" class="px-6 py-4 bg-gray-200 text-gray-800 text-lg font-semibold rounded-full shadow-lg hover:bg-gray-300 transition">Test API</button>' +
                     '</div>' +
                   '</div>' +
                 '</div>';
@@ -110,17 +108,10 @@
 
           app.innerHTML = html;
 
-          // Hook up events
+          // Events
           if (stage === 'start') {
             var startBtn = document.getElementById('start');
             if (startBtn) startBtn.addEventListener('click', function(){ stage='ask'; render(); });
-            var testBtn = document.getElementById('test-api');
-            if (testBtn) testBtn.addEventListener('click', function(){
-              fetch('/api/verse?feeling=hope')
-                .then(function(r){ return r.json().then(function(j){ return {ok:r.ok, j:j, status:r.status, text:r.statusText}; }); })
-                .then(function(o){ alert(o.ok ? JSON.stringify(o.j, null, 2) : ('API error: ' + (o.j && o.j.error ? o.j.error : (o.status+' '+o.text)))); })
-                .catch(function(e){ alert('API call failed: ' + e.message); });
-            });
           } else if (stage === 'ask') {
             var backBtn = document.getElementById('back');
             if (backBtn) backBtn.addEventListener('click', function(){ stage='start'; render(); });
