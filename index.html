@@ -13,7 +13,15 @@
     @keyframes spin { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
   </style>
 
-  <!-- (Optional) GA4 goes here later. Keep going for now. -->
+  <!-- (Optional) GA4 — paste your Measurement ID here when ready
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){ dataLayer.push(arguments); }
+    gtag('js', new Date());
+    gtag('config', 'G-XXXXXXX', { send_page_view: true });
+  </script>
+  -->
 </head>
 <body class="bg-gray-100 font-sans">
   <div id="app-container" class="min-h-screen flex items-center justify-center p-4"></div>
@@ -21,21 +29,22 @@
   <script>
   (function(){
     function init(){
-      const appContainer = document.getElementById('app-container');
+      const app = document.getElementById('app-container');
+
+      // State
       let stage = 'start';
       let userFeeling = '';
       let selectedVerse = null;
       let isLoading = false;
       let errorMessage = '';
 
+      // Helpers
       const withTimeout = async (promise, ms, controller) => {
         const t = setTimeout(() => controller.abort(), ms);
         try { return await promise; } finally { clearTimeout(t); }
       };
 
-      const escapeAttr = (s='') =>
-        String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
-
+      // Handlers
       const handleSubmit = async (e) => {
         e.preventDefault();
         if (isLoading) return;
@@ -47,7 +56,7 @@
         isLoading = true;
         errorMessage = '';
         selectedVerse = null;
-        renderContent();
+        render();
 
         try {
           const controller = new AbortController();
@@ -58,29 +67,28 @@
           }), 15000, controller);
 
           const data = await response.json();
-         if (!response.ok) {
-  const detail = data?.error ?? data;
-  const msg =
-    typeof detail === 'string'
-      ? detail
-      : (detail && detail.message) ? detail.message : JSON.stringify(detail);
-  throw new Error(`${response.status} ${response.statusText} — ${msg}`);
-}
-
-          if (data?.text && data?.reference) {
-            selectedVerse = data;
-          } else {
-            throw new Error('Unexpected server response.');
+          if (!response.ok) {
+            const detail = data?.error ?? data;
+            const msg = typeof detail === 'string'
+              ? detail
+              : (detail && detail.message) ? detail.message : JSON.stringify(detail);
+            throw new Error(`${response.status} ${response.statusText} — ${msg}`);
           }
-      } catch (err) {
-  console.error(err);
-  const msg = (err && (err.message || err.statusText || err.status))
-    ? (err.message || err.statusText || String(err.status))
-    : JSON.stringify(err);
-  errorMessage = `Sorry, I couldn’t fetch a verse: ${msg}`;
-  selectedVerse = null;
-}
 
+          selectedVerse = data; // { text, reference }
+          errorMessage = '';
+        } catch (err) {
+          console.error(err);
+          const msg = (err && (err.message || err.statusText || err.status))
+            ? (err.message || err.statusText || String(err.status))
+            : JSON.stringify(err);
+          errorMessage = `Sorry, I couldn’t fetch a verse: ${msg}`;
+          selectedVerse = null;
+        } finally {
+          isLoading = false;
+          stage = 'result';
+          render();
+        }
       };
 
       const handleStartOver = () => {
@@ -88,10 +96,11 @@
         userFeeling = '';
         selectedVerse = null;
         errorMessage = '';
-        renderContent();
+        render();
       };
 
-      const renderContent = () => {
+      // UI
+      const render = () => {
         let html = '';
         if (isLoading) {
           html = `
@@ -130,7 +139,7 @@
                     <h2 class="text-2xl sm:text-3xl font-bold text-gray-800">How are you feeling today?</h2>
                     <p class="text-md sm:text-lg text-gray-600">In a few words, describe what's on your heart</p>
                     <form id="verse-form" class="w-full">
-                      <input type="text" id="feeling-input" value="${escapeAttr(userFeeling)}" placeholder="e.g., Anxious, grateful, in need of guidance..." class="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-inner focus:outline-none focus:ring-2 focus:ring-purple-500 transition duration-200"/>
+                      <input type="text" id="feeling-input" placeholder="e.g., Anxious, grateful, in need of guidance..." class="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-inner focus:outline-none focus:ring-2 focus:ring-purple-500 transition duration-200"/>
                       <button type="submit" class="mt-6 w-full px-8 py-4 bg-purple-600 text-white text-lg font-semibold rounded-full shadow-lg hover:bg-purple-700 transition duration-300 transform hover:scale-105">
                         Find a Verse
                       </button>
@@ -143,7 +152,7 @@
               html = `
                 <div class="bg-white rounded-3xl shadow-2xl p-8 sm:p-12 max-w-2xl w-full">
                   <div class="flex flex-col items-center space-y-6 text-center w-full max-w-xl">
-                    <h2 class="text-2xl sm:text-3xl font-bold text-gray-800">${selectedVerse ? 'A verse for your heart:' : 'An Error Occurred'}</h2>
+                    <h2 class="text-2xl sm:text-3xl font-bold text-gray-800">${selectedVerse ? 'A verse for your heart:' : 'Something went wrong'}</h2>
                     <div class="bg-gray-50 p-6 rounded-2xl shadow-xl w-full">${verseContent}</div>
                     <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 mt-6 w-full">
                       <button id="start-over-button" class="w-full px-8 py-4 bg-gray-200 text-gray-800 text-lg font-semibold rounded-full shadow-lg hover:bg-gray-300 transition duration-300 transform hover:scale-105">
@@ -156,27 +165,17 @@
 
             default:
               stage = 'start';
-              renderContent();
+              render();
               return;
           }
         }
-        appContainer.innerHTML = html;
 
+        app.innerHTML = html;
+
+        // Listeners
         if (stage === 'start') {
-          document.getElementById('start-button')?.addEventListener('click', () => { stage = 'ask'; renderContent(); });
+          document.getElementById('start-button')?.addEventListener('click', () => { stage = 'ask'; render(); });
         } else if (stage === 'ask') {
           document.getElementById('verse-form')?.addEventListener('submit', handleSubmit);
         } else if (stage === 'result') {
           document.getElementById('start-over-button')?.addEventListener('click', handleStartOver);
-        }
-      };
-
-      renderContent();
-    }
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
-    else init();
-  })();
-  </script>
-</body>
-</html>
-
