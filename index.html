@@ -58,22 +58,29 @@
           }), 15000, controller);
 
           const data = await response.json();
-          if (!response.ok) throw new Error(data?.error || `${response.status} ${response.statusText}`);
+         if (!response.ok) {
+  const detail = data?.error ?? data;
+  const msg =
+    typeof detail === 'string'
+      ? detail
+      : (detail && detail.message) ? detail.message : JSON.stringify(detail);
+  throw new Error(`${response.status} ${response.statusText} — ${msg}`);
+}
 
           if (data?.text && data?.reference) {
             selectedVerse = data;
           } else {
             throw new Error('Unexpected server response.');
           }
-        } catch (err) {
-          console.error(err);
-          errorMessage = `Sorry, I couldn’t fetch a verse: ${err.message}`;
-          selectedVerse = null;
-        } finally {
-          isLoading = false;
-          stage = 'result';
-          renderContent();
-        }
+      } catch (err) {
+  console.error(err);
+  const msg = (err && (err.message || err.statusText || err.status))
+    ? (err.message || err.statusText || String(err.status))
+    : JSON.stringify(err);
+  errorMessage = `Sorry, I couldn’t fetch a verse: ${msg}`;
+  selectedVerse = null;
+}
+
       };
 
       const handleStartOver = () => {
@@ -172,3 +179,4 @@
   </script>
 </body>
 </html>
+
