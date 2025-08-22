@@ -12,170 +12,169 @@
     .spinner { border:4px solid rgba(0,0,0,0.1); width:36px; height:36px; border-radius:50%; border-left-color:#6d28d9; animation:spin 1s ease infinite; }
     @keyframes spin { 0%{transform:rotate(0)} 100%{transform:rotate(360deg)} }
   </style>
-
-  <!-- (Optional) GA4 — paste your Measurement ID here when ready
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXX"></script>
-  <script>
-    window.dataLayer = window.dataLayer || [];
-    function gtag(){ dataLayer.push(arguments); }
-    gtag('js', new Date());
-    gtag('config', 'G-XXXXXXX', { send_page_view: true });
-  </script>
-  -->
+  <noscript>
+    <div style="padding:12px;background:#fee2e2;color:#991b1b;font-family:monospace">
+      This site needs JavaScript enabled.
+    </div>
+  </noscript>
 </head>
 <body class="bg-gray-100 font-sans">
-  <div id="app-container" class="min-h-screen flex items-center justify-center p-4"></div>
+  <div id="app" class="min-h-screen flex items-center justify-center p-4">Loading…</div>
 
   <script>
-  (function(){
-    function init(){
-      const app = document.getElementById('app-container');
+  (function () {
+    // === Error overlay so you never see a silent white screen ===
+    function showError(msg) {
+      const bar = document.createElement('div');
+      bar.style.cssText = 'position:fixed;left:0;right:0;bottom:0;background:#fee2e2;color:#991b1b;padding:8px 12px;font-family:monospace;z-index:99999';
+      bar.textContent = 'Error: ' + msg;
+      document.body.appendChild(bar);
+    }
+    window.addEventListener('error', e => showError(e.message));
+    window.addEventListener('unhandledrejection', e => showError((e.reason && e.reason.message) ? e.reason.message : String(e.reason)));
 
-      // State
+    function init() {
+      const app = document.getElementById('app');
+      if (!app) { showError('#app not found'); return; }
+
+      // ---- State ----
       let stage = 'start';
-      let userFeeling = '';
-      let selectedVerse = null;
       let isLoading = false;
       let errorMessage = '';
+      let selectedVerse = null;
 
-      // Helpers
+      // ---- Helpers ----
       const withTimeout = async (promise, ms, controller) => {
         const t = setTimeout(() => controller.abort(), ms);
         try { return await promise; } finally { clearTimeout(t); }
       };
 
-      // Handlers
-      const handleSubmit = async (e) => {
-        e.preventDefault();
-        if (isLoading) return;
-
-        const input = document.getElementById('feeling-input');
-        userFeeling = input ? input.value : '';
-        if (!userFeeling.trim()) return;
-
-        isLoading = true;
-        errorMessage = '';
-        selectedVerse = null;
-        render();
-
+      function render() {
         try {
-          const controller = new AbortController();
-          const response = await withTimeout(fetch(`/api/verse?feeling=${encodeURIComponent(userFeeling)}`, {
-            method: 'GET',
-            headers: { 'Accept': 'application/json' },
-            signal: controller.signal
-          }), 15000, controller);
+          let html = '';
+          if (isLoading) {
+            html = `
+              <div class="bg-white rounded-3xl shadow-2xl p-8 sm:p-12 max-w-2xl w-full flex flex-col items-center justify-center">
+                <div class="spinner"></div>
+                <p class="mt-6 text-xl text-gray-600 font-semibold text-center">Finding a verse just for you...</p>
+              </div>`;
+          } else {
+            let verseBlock = '';
+            if (selectedVerse) {
+              // Escape text for safety
+              const esc = s => String(s).replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
+              verseBlock = `
+                <p class="text-2xl sm:text-3xl italic text-gray-700 font-serif leading-relaxed mb-4">“${esc(selectedVerse.text)}”</p>
+                <p class="text-lg font-semibold text-purple-600 border-t border-gray-200 pt-4">${esc(selectedVerse.reference)}</p>`;
+            } else if (errorMessage) {
+              verseBlock = `<p class="text-lg text-red-500 font-semibold text-center">${errorMessage}</p>`;
+            }
 
-          const data = await response.json();
-          if (!response.ok) {
-            const detail = data?.error ?? data;
-            const msg = typeof detail === 'string'
-              ? detail
-              : (detail && detail.message) ? detail.message : JSON.stringify(detail);
-            throw new Error(`${response.status} ${response.statusText} — ${msg}`);
-          }
-
-          selectedVerse = data; // { text, reference }
-          errorMessage = '';
-        } catch (err) {
-          console.error(err);
-          const msg = (err && (err.message || err.statusText || err.status))
-            ? (err.message || err.statusText || String(err.status))
-            : JSON.stringify(err);
-          errorMessage = `Sorry, I couldn’t fetch a verse: ${msg}`;
-          selectedVerse = null;
-        } finally {
-          isLoading = false;
-          stage = 'result';
-          render();
-        }
-      };
-
-      const handleStartOver = () => {
-        stage = 'start';
-        userFeeling = '';
-        selectedVerse = null;
-        errorMessage = '';
-        render();
-      };
-
-      // UI
-      const render = () => {
-        let html = '';
-        if (isLoading) {
-          html = `
-            <div class="bg-white rounded-3xl shadow-2xl p-8 sm:p-12 max-w-2xl w-full flex flex-col items-center justify-center">
-              <div class="spinner"></div>
-              <p class="mt-6 text-xl text-gray-600 font-semibold text-center">Finding a verse just for you...</p>
-            </div>`;
-        } else {
-          let verseContent = '';
-          if (selectedVerse) {
-            verseContent = `
-              <p class="text-2xl sm:text-3xl italic text-gray-700 font-serif leading-relaxed mb-4">“${selectedVerse.text}”</p>
-              <p class="text-lg font-semibold text-purple-600 border-t border-gray-200 pt-4">${selectedVerse.reference}</p>`;
-          } else if (errorMessage) {
-            verseContent = `<p class="text-lg text-red-500 font-semibold text-center">${errorMessage}</p>`;
-          }
-
-          switch (stage) {
-            case 'start':
+            if (stage === 'start') {
               html = `
                 <div class="bg-white rounded-3xl shadow-2xl p-8 sm:p-12 max-w-2xl w-full">
                   <div class="flex flex-col items-center space-y-4 text-center">
                     <h1 class="text-3xl sm:text-4xl font-bold text-gray-800">Your Bible Helper</h1>
                     <p class="text-lg sm:text-xl text-gray-600 max-w-md">A simple, private space to find a Bible verse that resonates with your heart today.</p>
-                    <button id="start-button" class="mt-6 px-8 py-4 bg-purple-600 text-white text-lg font-semibold rounded-full shadow-lg hover:bg-purple-700 transition duration-300 transform hover:scale-105">
-                      Find Your Verse
-                    </button>
+                    <div class="flex gap-3 mt-4">
+                      <button id="start" class="px-8 py-4 bg-purple-600 text-white text-lg font-semibold rounded-full shadow-lg hover:bg-purple-700 transition">Find Your Verse</button>
+                      <button id="test-api" class="px-6 py-4 bg-gray-200 text-gray-800 text-lg font-semibold rounded-full shadow-lg hover:bg-gray-300 transition">Test API</button>
+                    </div>
                   </div>
                 </div>`;
-              break;
-
-            case 'ask':
+            } else if (stage === 'ask') {
               html = `
                 <div class="bg-white rounded-3xl shadow-2xl p-8 sm:p-12 max-w-2xl w-full">
                   <div class="flex flex-col items-center space-y-6 w-full max-w-xl text-center">
                     <h2 class="text-2xl sm:text-3xl font-bold text-gray-800">How are you feeling today?</h2>
                     <p class="text-md sm:text-lg text-gray-600">In a few words, describe what's on your heart</p>
-                    <form id="verse-form" class="w-full">
-                      <input type="text" id="feeling-input" placeholder="e.g., Anxious, grateful, in need of guidance..." class="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-inner focus:outline-none focus:ring-2 focus:ring-purple-500 transition duration-200"/>
-                      <button type="submit" class="mt-6 w-full px-8 py-4 bg-purple-600 text-white text-lg font-semibold rounded-full shadow-lg hover:bg-purple-700 transition duration-300 transform hover:scale-105">
-                        Find a Verse
-                      </button>
+                    <form id="form" class="w-full">
+                      <input id="feeling" type="text" placeholder="e.g., Anxious, grateful, in need of guidance..." class="w-full px-4 py-3 border border-gray-300 rounded-xl shadow-inner focus:outline-none focus:ring-2 focus:ring-purple-500 transition" />
+                      <button type="submit" class="mt-6 w-full px-8 py-4 bg-purple-600 text-white text-lg font-semibold rounded-full shadow-lg hover:bg-purple-700 transition">Find a Verse</button>
                     </form>
+                    <button id="back" class="mt-2 text-sm text-gray-500 underline">Back</button>
                   </div>
                 </div>`;
-              break;
-
-            case 'result':
+            } else if (stage === 'result') {
               html = `
                 <div class="bg-white rounded-3xl shadow-2xl p-8 sm:p-12 max-w-2xl w-full">
                   <div class="flex flex-col items-center space-y-6 text-center w-full max-w-xl">
                     <h2 class="text-2xl sm:text-3xl font-bold text-gray-800">${selectedVerse ? 'A verse for your heart:' : 'Something went wrong'}</h2>
-                    <div class="bg-gray-50 p-6 rounded-2xl shadow-xl w-full">${verseContent}</div>
-                    <div class="flex flex-col sm:flex-row space-y-4 sm:space-y-0 sm:space-x-4 mt-6 w-full">
-                      <button id="start-over-button" class="w-full px-8 py-4 bg-gray-200 text-gray-800 text-lg font-semibold rounded-full shadow-lg hover:bg-gray-300 transition duration-300 transform hover:scale-105">
-                        Start Over
-                      </button>
+                    <div class="bg-gray-50 p-6 rounded-2xl shadow-xl w-full">${verseBlock}</div>
+                    <div class="flex flex-col sm:flex-row gap-3 mt-6 w-full">
+                      <button id="again" class="w-full px-8 py-4 bg-gray-200 text-gray-800 text-lg font-semibold rounded-full shadow-lg hover:bg-gray-300 transition">Start Over</button>
                     </div>
                   </div>
                 </div>`;
-              break;
+            }
 
-            default:
-              stage = 'start';
-              render();
-              return;
+          app.innerHTML = html;
+
+          // Wire up events
+          if (stage === 'start') {
+            document.getElementById('start')?.addEventListener('click', () => { stage = 'ask'; render(); });
+            document.getElementById('test-api')?.addEventListener('click', async () => {
+              try {
+                const r = await fetch('/api/verse?feeling=hope');
+                const j = await r.json();
+                alert(r.ok ? JSON.stringify(j, null, 2) : 'API error: ' + (j?.error || r.statusText));
+              } catch (e) { alert('API call failed: ' + e.message); }
+            });
+          } else if (stage === 'ask') {
+            document.getElementById('back')?.addEventListener('click', () => { stage = 'start'; render(); });
+            document.getElementById('form')?.addEventListener('submit', onSubmit);
+          } else if (stage === 'result') {
+            document.getElementById('again')?.addEventListener('click', () => {
+              selectedVerse = null; errorMessage = ''; stage = 'start'; render();
+            });
           }
+        } catch (e) {
+          showError(e.message || String(e));
         }
+      }
 
-        app.innerHTML = html;
+      async function onSubmit(e) {
+        e.preventDefault();
+        const input = document.getElementById('feeling');
+        const feeling = (input && input.value || '').trim();
+        if (!feeling) return;
 
-        // Listeners
-        if (stage === 'start') {
-          document.getElementById('start-button')?.addEventListener('click', () => { stage = 'ask'; render(); });
-        } else if (stage === 'ask') {
-          document.getElementById('verse-form')?.addEventListener('submit', handleSubmit);
-        } else if (stage === 'result') {
-          document.getElementById('start-over-button')?.addEventListener('click', handleStartOver);
+        isLoading = true; errorMessage = ''; selectedVerse = null;
+        render();
+
+        try {
+          const controller = new AbortController();
+          const resp = await withTimeout(fetch(`/api/verse?feeling=${encodeURIComponent(feeling)}`, {
+            headers: { 'Accept': 'application/json' },
+            signal: controller.signal
+          }), 15000, controller);
+
+          const data = await resp.json();
+          if (!resp.ok) {
+            const detail = data?.error ?? data;
+            const msg = typeof detail === 'string' ? detail : (detail && detail.message) ? detail.message : JSON.stringify(detail);
+            throw new Error(`${resp.status} ${resp.statusText} — ${msg}`);
+          }
+
+          selectedVerse = data; // { text, reference }
+        } catch (err) {
+          errorMessage = 'Sorry, I couldn’t fetch a verse: ' + (err?.message || String(err));
+        } finally {
+          isLoading = false; stage = 'result'; render();
+        }
+      }
+
+      // First paint
+      stage = 'start';
+      render();
+    }
+
+    if (document.readyState === 'loading') {
+      document.addEventListener('DOMContentLoaded', init);
+    } else {
+      init();
+    }
+  })();
+  </script>
+</body>
+</html>
